@@ -7,6 +7,12 @@ from datasets import load_dataset
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
+LABEL_NAMES = {
+    0: "general_society",
+    1: "culture_entertainment",
+    2: "sports",
+}
+
 
 def inspect_split(split_name, split_dataset):
     print(f"\n{'=' * 50}")
@@ -22,14 +28,22 @@ def inspect_split(split_name, split_dataset):
     print("\nLabel counts:")
     for label, count in sorted(label_counts.items()):
         percentage = count / len(labels) * 100
-        print(f"Label {label}: {count} examples ({percentage:.2f}%)")
+        category = LABEL_NAMES.get(label, "unknown")
+
+        print(
+            f"Label {label} ({category}): "
+            f"{count} examples ({percentage:.2f}%)"
+        )
 
     print("\nFirst three examples:")
     for index in range(min(3, len(split_dataset))):
         example = split_dataset[index]
+        label = example["label"]
+        category = LABEL_NAMES.get(label, "unknown")
 
         print(f"\nExample {index + 1}")
-        print(f"Label: {example['label']}")
+        print(f"Label: {label}")
+        print(f"Category: {category}")
         print(f"Text: {example['text']}")
         print(f"Character count: {len(example['text'])}")
         print(f"Whitespace word count: {len(example['text'].split())}")
