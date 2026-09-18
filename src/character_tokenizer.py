@@ -206,6 +206,20 @@ def main():
             loaded_tokenizer.encode("नेपाल खेलकुद")
         )
     )
+    print("\nShort-sequence mask test:")
+
+    short_encoded = loaded_tokenizer.encode("नेपाल")
+    short_padded = loaded_tokenizer.pad_or_truncate(
+        short_encoded,
+        max_length=16,
+    )
+    short_mask = loaded_tokenizer.attention_mask(short_padded)
+
+    print("Short token IDs:")
+    print(short_padded)
+
+    print("Short attention mask:")
+    print(short_mask)
 
 
 
