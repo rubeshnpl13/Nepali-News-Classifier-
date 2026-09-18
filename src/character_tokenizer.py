@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections import Counter
-
+import json
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TRAIN_PATH = PROJECT_ROOT / "data" / "raw" / "train.parquet"
@@ -17,6 +17,49 @@ class CharacterTokenizer:
 
         self.char_to_id = {}
         self.id_to_char = {}
+
+    def save(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        data = {
+            "special_tokens": self.special_tokens,
+            "char_to_id": self.char_to_id,
+        }
+
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load(cls, path):
+        path = Path(path)
+
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        tokenizer = cls()
+        tokenizer.special_tokens = {
+            token: int(token_id)
+            for token, token_id in data["special_tokens"].items()
+        }
+        tokenizer.char_to_id = {
+            character: int(token_id)
+            for character, token_id in data["char_to_id"].items()
+        }
+        tokenizer.id_to_char = {
+            token_id: character
+            for character, token_id in tokenizer.char_to_id.items()
+        }
+
+        return tokenizer
+
+    def attention_mask(self, token_ids):
+        pad_id = self.char_to_id["<PAD>"]
+
+        return [
+            0 if token_id == pad_id else 1
+            for token_id in token_ids
+        ]
 
     def build_vocabulary(self, texts):
         character_counts = Counter()
@@ -72,16 +115,20 @@ class CharacterTokenizer:
         return "".join(characters)
 
     def pad_or_truncate(self, token_ids, max_length):
-        if len(token_ids) > max_length:
-            token_ids = token_ids[:max_length]
+        pad_id = self.char_to_id["<PAD>"]
+        bos_id = self.char_to_id["<BOS>"]
+        eos_id = self.char_to_id["<EOS>"]
 
-        padding_length = max_length - len(token_ids)
+        if len(token_ids) <= max_length:
+            padding_length = max_length - len(token_ids)
+            return token_ids + [pad_id] * padding_length
 
-        if padding_length > 0:
-            pad_id = self.char_to_id["<PAD>"]
-            token_ids = token_ids + [pad_id] * padding_length
+        truncated_ids = token_ids[:max_length]
 
-        return token_ids
+        if truncated_ids[0] == bos_id:
+            truncated_ids[-1] = eos_id
+
+        return truncated_ids
 
     @property
     def vocabulary_size(self):
@@ -111,64 +158,56 @@ def main():
 
     print(f"Vocabulary size: {tokenizer.vocabulary_size}")
 
-    print("\nSpecial tokens:")
-    for token, token_id in tokenizer.special_tokens.items():
-        print(f"{token}: {token_id}")
+    vocabulary_path = (
+        PROJECT_ROOT / "data" / "processed" / "character_vocab.json"
+    )
+
+    tokenizer.save(vocabulary_path)
+
+    print(f"Vocabulary saved to: {vocabulary_path}")
+
+    loaded_tokenizer = CharacterTokenizer.load(vocabulary_path)
+
+    print(
+        "Loaded vocabulary size:",
+        loaded_tokenizer.vocabulary_size,
+    )
 
     example_text = texts[0]
+
+    encoded = loaded_tokenizer.encode(example_text)
+    decoded = loaded_tokenizer.decode(encoded)
 
     print("\nOriginal text:")
     print(example_text)
 
-    encoded = tokenizer.encode(example_text)
-
-    print("\nEncoded token IDs:")
-    print(encoded)
-
-    decoded = tokenizer.decode(encoded)
-
-    print("\nDecoded text:")
-    print(decoded)
+    print("\nEncoded length:")
+    print(len(encoded))
 
     print("\nDecoded text matches original:")
     print(decoded == example_text)
 
-    print("\nExample character mappings:")
-    for character in sorted(set(example_text)):
-        token_id = tokenizer.char_to_id[character]
-        print(repr(character), "->", token_id)
+    print("\nPadding test:")
+    padded_ids = loaded_tokenizer.pad_or_truncate(
+        encoded,
+        max_length=32,
+    )
+    print("Token IDs:", padded_ids)
+    print("Length:", len(padded_ids))
 
-    unknown_text = "यो पाठमा नयाँ अक्षर 😀 छ।"
+    print("\nAttention-mask test:")
+    mask = loaded_tokenizer.attention_mask(padded_ids)
+    print("Attention mask:", mask)
+    print("Mask length:", len(mask))
 
-    unknown_encoded = tokenizer.encode(unknown_text)
+    print("\nReload test:")
+    print(
+        loaded_tokenizer.decode(
+            loaded_tokenizer.encode("नेपाल खेलकुद")
+        )
+    )
 
-    print("\nUnknown-character test:")
-    print(f"Text: {unknown_text}")
-    print(f"Encoded: {unknown_encoded}")
-    print(f"Decoded: {tokenizer.decode(unknown_encoded)}")
 
-    print("\nPadding and truncation test:")
-
-    short_ids = tokenizer.encode("नेपाल")
-    padded_ids = tokenizer.pad_or_truncate(short_ids, max_length=12)
-
-    print("Short text IDs:")
-    print(short_ids)
-
-    print("Padded IDs:")
-    print(padded_ids)
-
-    print("Length:")
-    print(len(padded_ids))
-
-    long_ids = tokenizer.encode("नेपाल खेलकुद समाचार " * 10)
-    truncated_ids = tokenizer.pad_or_truncate(long_ids, max_length=12)
-
-    print("\nLong text original length:")
-    print(len(long_ids))
-
-    print("Truncated length:")
-    print(len(truncated_ids))
 
 if __name__ == "__main__":
     main()
