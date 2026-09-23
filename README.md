@@ -283,7 +283,7 @@ The files in `src` are intentionally separated by learning stage so that each Tr
 Clone the repository:
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone (https://github.com/rubeshnpl13/Nepali-News-Classifier-)
 cd nepali-news-classifier
 ```
 
